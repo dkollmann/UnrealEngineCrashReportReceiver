@@ -1,6 +1,7 @@
 import { app } from "@azure/functions";
 import { BlobServiceClient } from "@azure/storage-blob";
 import crypto from "crypto";
+//import path from "path";
 
 app.http("UnrealEngineCrashReportReceiver", {
     methods: ["POST"],
@@ -8,35 +9,44 @@ app.http("UnrealEngineCrashReportReceiver", {
     route: "CrashReporter/{*path}",
 
     handler: async (req, context) => {
-        const path = req.params.path?.toLowerCase();
-        console.time(`CrashReporter:${path}`);
-        context.log(`CrashReporter endpoint hit: ${path}`);
+        context.log(`CrashReporter endpoint hit: ${req.params.path}`);
+        console.log(req.headers);
+
+        const splitpath = req.params.path.split("/");
+        const action = splitpath[0].toLowerCase();
+
+        console.time(`CrashReporter:${action}`);
 
         // -----------------------------
         // Handle CheckReport
         // -----------------------------
-        if (path === "checkreport") {
-            console.timeEnd(`CrashReporter:${path}`);
+        if (action === "checkreport") {
+            console.timeEnd(`CrashReporter:${action}`);
             return {
                 status: 200,
                 headers: { "Content-Type": "application/xml" },
-                body: "<CrashReporterResult bSuccess=\"true\"/>"
+                body: `<CrashReporterResult bSuccess="true"/>`
             };
         }
 
         // -----------------------------
         // Handle SubmitReport
         // -----------------------------
-        if (path === "submitreport") {
+        if (action === "submitreport") {
             try {
                 const blobConn = process.env.CrashBlobConnection;
                 if (!blobConn) {
                     throw new Error("CrashBlobConnection environment variable not set.");
                 }
 
+                context.log(`SubmitReport body length: ${bodyBuffer.length}`);
+                context.log(`Getting container 'crashes'...`);
+                
                 const blobService = BlobServiceClient.fromConnectionString(blobConn);
                 const containerClient = blobService.getContainerClient("crashes");
                 await containerClient.createIfNotExists();
+
+                context.log(`Uploading to container 'crashes'...`);
 
                 const bodyBuffer = Buffer.from(await req.arrayBuffer());
 
@@ -49,21 +59,81 @@ app.http("UnrealEngineCrashReportReceiver", {
                     bodyBuffer.length
                 );
 
-                context.log(`Uploaded crash payload: ${fileName}`);
-                console.timeEnd(`CrashReporter:${path}`);
+                context.log(`Uploaded crash report: ${fileName}`);
+                console.timeEnd(`CrashReporter:${action}`);
 
-                return { status: 200, body: "OK" };
+                return {
+                    status: 200,
+                    headers: { "Content-Type": "application/xml" },
+                    body: `<CrashReporterResult bSuccess="true"/>`
+                };
 
             } catch (err) {
-                context.log.error("Error processing crash report", err);
+                context.log(`Error: processing crash report: ${err}`);
                 return { status: 500, body: "Failed to process crash report." };
             }
         }
 
         // -----------------------------
+        // Handle UploadReportFile
+        // -----------------------------
+        if (action === "uploadreportfile") {
+            try {
+                const storage = process.env.CrashReportStorageConnectionString;
+                if (!storage) {
+                    throw new Error("CrashReportStorageConnectionString environment variable not set.");
+                }
+
+                context.log(`UploadReportFile body length: ${bodyBuffer.length}`);
+                context.log(`Getting container 'crashes'...`);
+                
+                const storageService = BlobServiceClient.fromConnectionString(storage);
+                const containerClient = storageService.getContainerClient("crashes");
+                await containerClient.createIfNotExists();
+
+                context.log(`Uploading to container 'crashes'...`);
+
+                const bodyBuffer = Buffer.from(await req.arrayBuffer());
+
+                const timestamp = new Date().toISOString().replace(/[:.]/g, "_");
+                const fileName = `crash_${timestamp}_${crypto.randomUUID()}.bin`;
+
+                await containerClient.uploadBlockBlob(
+                    fileName,
+                    bodyBuffer,
+                    bodyBuffer.length
+                );
+
+                context.log(`Uploaded crash report file: ${fileName}`);
+                console.timeEnd(`CrashReporter:${action}`);
+
+                return {
+                    status: 200,
+                    headers: { "Content-Type": "application/xml" },
+                    body: `<CrashReporterResult bSuccess="true"/>`
+                };
+
+            } catch (err) {
+                context.log(`Error: processing crash report file: ${err}`);
+                return { status: 500, body: "Failed to process crash report file." };
+            }
+        }
+
+        // -----------------------------
+        // Handle UploadComplete
+        // -----------------------------
+        if (action === "uploadcomplete") {
+            return {
+                status: 200,
+                headers: { "Content-Type": "application/xml" },
+                body: `<CrashReporterResult bSuccess="true"/>`
+            };
+        }
+
+        // -----------------------------
         // Unknown endpoint
         // -----------------------------
-        console.timeEnd(`CrashReporter:${path}`);
+        console.timeEnd(`CrashReporter:${action}`);
         return { status: 404, body: "Unknown CrashReporter endpoint." };
     }
 });
