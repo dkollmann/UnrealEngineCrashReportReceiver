@@ -20,7 +20,7 @@ app.http("UnrealEngineCrashReportReceiver", {
             return {
                 status: 200,
                 headers: { "Content-Type": "application/xml" },
-                body: "<CrashReporterResult>OK</CrashReporterResult>"
+                body: "<CrashReporterResult bSuccess=\"true\"/>"
             };
         }
 
