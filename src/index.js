@@ -118,7 +118,10 @@ app.http("UnrealEngineCrashReportReceiver", {
 					offset += nameLen;
 
 					const nameEnd = nameData.indexOf(0);
-					const name = nameData.slice(0, nameEnd).toString("utf-8");
+					let name = nameData.slice(0, nameEnd).toString("utf-8");
+
+					if (name.endsWith("-xml"))
+						name = name.slice(0, -4) + ".xml";
 
 					context.log(`UploadReportFile file${fileIndex}: name=${name}`);
 
