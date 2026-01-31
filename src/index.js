@@ -1,8 +1,8 @@
 import { app } from "@azure/functions";
 import { BlobServiceClient } from "@azure/storage-blob";
 import crypto from "crypto";
-import { Readable } from "stream";
-import zlib from "zlib";
+//import { Readable } from "stream";
+//import zlib from "zlib";
 
 app.http("UnrealEngineCrashReportReceiver", {
     methods: ["POST"],
@@ -13,8 +13,9 @@ app.http("UnrealEngineCrashReportReceiver", {
         context.log(`CrashReporter endpoint hit: ${req.params.path}`);
         console.log(req.headers);
 
-        const splitpath = req.params.path.split("/");
-        const action = splitpath[0].toLowerCase();
+        const action = req.params.path.toLowerCase();
+
+        const currentFileName = req.query.filename || `crash__${new Date().toISOString().replace(/[:.]/g, "-")}__${crypto.randomUUID()}`;
 
         console.time(`CrashReporter:${action}`);
 
@@ -51,16 +52,13 @@ app.http("UnrealEngineCrashReportReceiver", {
                 const bodyBuffer = Buffer.from(await req.arrayBuffer());
                 context.log(`SubmitReport body length: ${bodyBuffer.length}`);
 
-                const timestamp = new Date().toISOString().replace(/[:.]/g, "_");
-                const fileName = `crash_${timestamp}_${crypto.randomUUID()}.txt`;
-
                 await containerClient.uploadBlockBlob(
-                    fileName,
+                    currentFileName,
                     bodyBuffer,
                     bodyBuffer.length
                 );
 
-                context.log(`Uploaded crash report: ${fileName}`);
+                context.log(`Uploaded crash report: ${currentFileName}`);
                 console.timeEnd(`CrashReporter:${action}`);
 
                 return {
@@ -96,25 +94,22 @@ app.http("UnrealEngineCrashReportReceiver", {
                 const bodyBuffer = Buffer.from(await req.arrayBuffer());
                 context.log(`UploadReportFile body length: ${bodyBuffer.length}`);
 
-                const timestamp = new Date().toISOString().replace(/[:.]/g, "_");
-                const fileName = `crash_${timestamp}_${crypto.randomUUID()}.gz`;
-
                 // save as gzip
-                const bufferStream = Readable.from(bodyBuffer);
+                /*const bufferStream = Readable.from(bodyBuffer);
                 const gzip = zlib.createGzip();
                 const gzipStream = bufferStream.pipe(gzip);
 
-                const blobClient = containerClient.getBlockBlobClient(fileName);
+                const blobClient = containerClient.getBlockBlobClient(currentFileName);
 
-                await blobClient.uploadStream(gzipStream, 4 * 1024 * 1024);
+                await blobClient.uploadStream(gzipStream, 4 * 1024 * 1024);*/
 
-                /*await containerClient.uploadBlockBlob(
-                    fileName,
+                await containerClient.uploadBlockBlob(
+                    currentFileName + ".gz",
                     bodyBuffer,
                     bodyBuffer.length
-                );*/
+                );
 
-                context.log(`Uploaded crash report file: ${fileName}`);
+                context.log(`Uploaded crash report file: ${currentFileName}`);
                 console.timeEnd(`CrashReporter:${action}`);
 
                 return {
