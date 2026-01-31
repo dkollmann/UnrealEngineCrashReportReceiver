@@ -1,7 +1,8 @@
 import { app } from "@azure/functions";
 import { BlobServiceClient } from "@azure/storage-blob";
 import crypto from "crypto";
-//import path from "path";
+import { Readable } from "stream";
+import zlib from "zlib";
 
 app.http("UnrealEngineCrashReportReceiver", {
     methods: ["POST"],
@@ -39,7 +40,6 @@ app.http("UnrealEngineCrashReportReceiver", {
                     throw new Error("CrashBlobConnection environment variable not set.");
                 }
 
-                context.log(`SubmitReport body length: ${bodyBuffer.length}`);
                 context.log(`Getting container 'crashes'...`);
                 
                 const blobService = BlobServiceClient.fromConnectionString(blobConn);
@@ -49,9 +49,10 @@ app.http("UnrealEngineCrashReportReceiver", {
                 context.log(`Uploading to container 'crashes'...`);
 
                 const bodyBuffer = Buffer.from(await req.arrayBuffer());
+                context.log(`SubmitReport body length: ${bodyBuffer.length}`);
 
                 const timestamp = new Date().toISOString().replace(/[:.]/g, "_");
-                const fileName = `crash_${timestamp}_${crypto.randomUUID()}.bin`;
+                const fileName = `crash_${timestamp}_${crypto.randomUUID()}.txt`;
 
                 await containerClient.uploadBlockBlob(
                     fileName,
@@ -84,7 +85,6 @@ app.http("UnrealEngineCrashReportReceiver", {
                     throw new Error("CrashReportStorageConnectionString environment variable not set.");
                 }
 
-                context.log(`UploadReportFile body length: ${bodyBuffer.length}`);
                 context.log(`Getting container 'crashes'...`);
                 
                 const storageService = BlobServiceClient.fromConnectionString(storage);
@@ -94,15 +94,25 @@ app.http("UnrealEngineCrashReportReceiver", {
                 context.log(`Uploading to container 'crashes'...`);
 
                 const bodyBuffer = Buffer.from(await req.arrayBuffer());
+                context.log(`UploadReportFile body length: ${bodyBuffer.length}`);
 
                 const timestamp = new Date().toISOString().replace(/[:.]/g, "_");
-                const fileName = `crash_${timestamp}_${crypto.randomUUID()}.bin`;
+                const fileName = `crash_${timestamp}_${crypto.randomUUID()}.gz`;
 
-                await containerClient.uploadBlockBlob(
+                // save as gzip
+                const bufferStream = Readable.from(bodyBuffer);
+                const gzip = zlib.createGzip();
+                const gzipStream = bufferStream.pipe(gzip);
+
+                const blobClient = containerClient.getBlockBlobClient(fileName);
+
+                await blobClient.uploadStream(gzipStream, 4 * 1024 * 1024);
+
+                /*await containerClient.uploadBlockBlob(
                     fileName,
                     bodyBuffer,
                     bodyBuffer.length
-                );
+                );*/
 
                 context.log(`Uploaded crash report file: ${fileName}`);
                 console.timeEnd(`CrashReporter:${action}`);
@@ -134,6 +144,7 @@ app.http("UnrealEngineCrashReportReceiver", {
         // Unknown endpoint
         // -----------------------------
         console.timeEnd(`CrashReporter:${action}`);
+        context.log.warn(`Unknown CrashReporter endpoint: ${action}.`);
         return { status: 404, body: "Unknown CrashReporter endpoint." };
     }
 });

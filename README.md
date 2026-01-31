@@ -32,6 +32,7 @@ The crash reporter basically connection works like this:
 - Sign in to Azure.
 - Open your subscription, go to "Function App" and you should find the function you created before. Right-click it and click "Deploy to Function App".
 - Click "Deploy" in the window that will popup shortly.
+- Sometimes you get a "no claims" error. Just restart Visual Studio Code.
 - After this, on the Azure Function Overview page, there should no be the function "UnrealEngineCrashReportReceiver" be listed at the bottom.
 
 # Set up Unreal
@@ -59,3 +60,13 @@ CrashReportReceiverPort=443
 - On the Azure Function Overviedw page, click on the "UnrealEngineCrashReportReceiver" function at the bottom.
 - Switch to the "Invocations" tab.
 - Each crash report will create multiple entries here. Refreshing it sometimes takes a minute or two for entries to show up.
+
+# Investigate Crash Reports
+- On the Azure website, ope nthe strorage you are uploading to.
+- Makes sure you have rights to browse it...
+  - Go to "Access Control" and "Role Assigment".
+  - In the toolbar, click on "Add" and pick "Add Role Assignment".
+  - Search for "Storage Blob Data Reader". Select it and click "Next".
+  - Click "Select members" and the users you want to be able to brows the storage.
+  - Click "Review and Assign".
+- On th left go to "Storage browser / Blob containers / crashes".
